@@ -8,8 +8,13 @@ import bencode from "bencode"
 
 let udp_port = 0
 
-async function getMetadata(ip, port) {
-    const socket = net.connect(port, ip)
+async function getMetadata(supporUdp, ip, port) {
+    let socket;
+    if(supporUdp) {
+        socket = utp.connect(port, ip)
+    } else {
+        socket = net.connect(port, ip)
+    }
     const wire = new Protocol()
 
     socket.setKeepAlive(true, 45000)
@@ -61,9 +66,9 @@ async function getMetadata(ip, port) {
 
     wire.ut_pex.on('peer', (peer, flags) => {
         let ip = peer.split(':')[0]
-        let udp = flags[2]
-        let port = udp_port
-        parentPort.postMessage({host: ip, port: port, node: udp})
+        let port = peer.split(':')[1]
+        let supporUdp = flags[2]
+        parentPort.postMessage({host: ip, port: port, node: supporUdp})
     })
 
     socket.on('close', () => {
@@ -72,7 +77,7 @@ async function getMetadata(ip, port) {
 }
 
 parentPort.on('message', async (msg) => {
-    let result = await getMetadata(msg.ip, msg.port)
+    let result = await getMetadata(supporUdp, msg.ip, msg.port)
     if(result) {
         parentPort.postMessage({end: result})
     }

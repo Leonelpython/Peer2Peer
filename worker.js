@@ -14,9 +14,14 @@ setInterval(() => {
 
 let udp_port = 20000
 
-async function pair(ip, port, info_hash, blocks, piece_length, hash_array, filename, total_length, pieces, storage) {
+async function pair(supporUdp, ip, port, info_hash, blocks, piece_length, hash_array, filename, total_length, pieces, storage) {
     // net.createServer(socket => {
-    const socket = net.connect(port, ip)
+    let socket;
+    if(supporUdp) {
+        socket = utp.connect(port, ip)
+    } else {
+        socket = net.connect(port, ip)
+    }
     const wire = new Protocol()
     socket.setKeepAlive(true, 60000)
     socket.pipe(wire).pipe(socket)
@@ -120,7 +125,7 @@ async function compareHash(buffer, hash_array) {
 }
 
 parentPort.on('message', async (msg) => {
-    let result = await pair(msg.ip, msg.port, msg.info_hash, msg.blocks, msg.piece_length, msg.hash_array, msg.filename, msg.total_length, msg.pieces, msg.storage)
+    let result = await pair(msg.supporUdp, msg.ip, msg.port, msg.info_hash, msg.blocks, msg.piece_length, msg.hash_array, msg.filename, msg.total_length, msg.pieces, msg.storage)
     if(result) {
         parentPort.postMessage({end: result})
     }

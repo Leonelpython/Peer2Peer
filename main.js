@@ -55,6 +55,7 @@ let metadata = {
     "filename": ''
 }
 let hasmetadata = false
+let supporUdp = false
 let connected = 0
 
 const storage = {}
@@ -77,7 +78,7 @@ let obj = {
 async function run(ip, port) {
     return new Promise((resolve, reject) => {
         const worker = new Worker('./worker.js')
-        worker.postMessage({ip_addr: ip, port: port, info_hash: metadata.info_hash, blocks: metadata.blocks, piece_length: metadata.piece_length, hash_array: metadata.hash_array, filename: metadata.filename, total_length: metadata.total_length, storage: storage})
+        worker.postMessage({supporUdp: supporUdp, ip_addr: ip, port: port, info_hash: metadata.info_hash, blocks: metadata.blocks, piece_length: metadata.piece_length, hash_array: metadata.hash_array, filename: metadata.filename, total_length: metadata.total_length, storage: storage})
         worker.on('online', () => {
             console.log(`worker ${item} started`)
         })
@@ -102,9 +103,9 @@ async function run(ip, port) {
                     if(connected < 100) {
                         if(msg.node == true) {
                             nodesIp.push(msg.host)
-                            await run(msg.host, msg.port)
+                            await run(msg.node, msg.host, msg.port)
                         } else {
-                            await run(queue[0].host, queue[0].port)
+                            await run(supporUdp, queue[0].host, queue[0].port)
                             delete queue[0]
                         }
                         connected++
@@ -131,10 +132,10 @@ async function run(ip, port) {
     })
 }
 
-async function metadataGet(ip, port) {
+async function metadataGet(supporUdp, ip, port) {
     return new Promise((resolve, reject) => {
         const worker = new Worker('./metadata.js')
-        worker.postMessage({ip_addr: ip, port: port})
+        worker.postMessage({supporUdp, ip_addr: ip, port: port})
         worker.on('online', () => {
             console.log(`worker metadata started`)
         })
@@ -163,9 +164,9 @@ async function metadataGet(ip, port) {
                     if(connected < 100) {
                         if(msg.node == true) {
                             nodesIp.push(msg.host)
-                            await metadataGet(msg.host, msg.port)
+                            await metadataGet(supporUdp, msg.host, msg.port)
                         } else {
-                            await metadataGet(queue[0].host, queue[0].port)
+                            await metadataGet(supporUdp, queue[0].host, queue[0].port)
                             delete queue[0]
                         }
                         connected++
