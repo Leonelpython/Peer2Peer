@@ -1,0 +1,27 @@
+{
+  "name": "back",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "module",
+  "dependencies": {
+    "bencode": "^4.0.0",
+    "bittorrent-dht": "^11.0.11",
+    "bittorrent-lsd": "^2.0.0",
+    "bittorrent-protocol": "^4.1.21",
+    "bittorrent-tracker": "^0.7.3",
+    "crypto": "^1.0.1",
+    "express": "^5.2.1",
+    "parse-torrent": "^11.0.19",
+    "ut_metadata": "^4.0.3",
+    "ut_pex": "^4.0.4",
+    "utp-native": "^2.5.3",
+    "uuid": "^13.0.0"
+  }
+}
