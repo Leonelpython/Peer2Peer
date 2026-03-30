@@ -68,11 +68,7 @@ async function download_byname(name) {
             index = 0
         }
         let metadata = await DhtByHash(hash_workers, extract_workers, IPPort_workers, null, name, true, null, null, true, true)
-        metadata.then(async (data) => {
-            await dhtByIpPort("download", IPPort_workers, metadata.infoHash, extract_workers, null, false, storage, data, true)
-        }).catch((err) => {
-            console.error(`error by hash: ${err}`)
-        })
+        await dhtByIpPort("download", IPPort_workers, metadata.infoHash, extract_workers, null, false, storage, data, true, true)
         index++
         ext_index++
     }
@@ -92,12 +88,8 @@ async function download_byhash(hash) {
         if(ext_index > hash_workers.length) {
             index = 0
         }
-        let metadata = await dhtByIpPort("metadata_byIPPort", IPPort_workers, hash, extract_workers, null, false, null, null, true)
-        metadata.then(async (data) => {
-            await dhtByIpPort("download", IPPort_workers, hash, extract_workers, null, false, storage, data, true)
-        }).catch((err) => {
-            console.error(`error by hash: ${err}`)
-        })
+        let metadata = await dhtByIpPort("metadata_byIPPort", IPPort_workers, hash, extract_workers, null, null, true, true)
+        await dhtByIpPort("download", IPPort_workers, hash, extract_workers, storage, metadata, true, true)
 
         index++
         ext_index++

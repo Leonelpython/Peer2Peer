@@ -21,8 +21,5 @@ async function extractMetadata(buffer) {
 }
 
 parentPort.on('message', async (msg) => {
-    let result = await extractMetadata(msg.buffer)
-    if(result) {
-        parentPort.postMessage(result)
-    }
+    await extractMetadata(msg.buffer)
 })

@@ -21,34 +21,46 @@ let infoHash_found = Set()
 export let droppedIp = Set()
 
 let supporUdp = true
-let connected = 0
-let found = {}
+
+export let connected = 0
+export let queue_length = 0
+export let dropped_length = 0
 
 async function Downloader(supporUdp=true, ip, port, main_worker, metadata, store) {
     return new Promise((resolve, reject) => {
         main_worker.postMessage({supporUdp: supporUdp, ip_addr: ip, port: port, info_hash: metadata.info_hash, blocks: metadata.blocks, piece_length: metadata.piece_length, hash_array: metadata.hash_array, filename: metadata.filename, total_length: metadata.total_length, storage: store})
         main_worker.on('online', () => {
+            connected++
             console.log(`worker ${item} started`)
         })
         main_worker.on("message", async (msg) => {
             if(msg.end) {
                 await writefile(`${metadata.filename}`, store, metadata.piece_length)
                 resolve()
+                connected--
             }
             if(msg.dropped) {
                 droppedIp.push(msg.host)
+                dropped_length++
             }
             if(msg.update) {
                 update('node-bittorents.json', dht_ip.toJson().nodes)
             }
-            await message(msg, connected, main_worker, null, metadata, store)
+            let mes = await message(msg, connected, main_worker, null, metadata, store)
+            if(!mes) {
+                reject()
+                droppedIp.push(msg.host)
+                connected--
+            }
         })
         main_worker.on('error', (err) => {
             console.error(`error thread ${item}: ${err}`)
             reject(err)
+            connected--
         })
         main_worker.on('exit', (code) => {
             console.error(`thread exited with code: ${code}`)
+            connected--
         })
     })
 }
@@ -57,21 +69,23 @@ async function GetMetadataByIPPort(supporUdp=true, ip, port, main_worker, ext_wo
     return new Promise((resolve, reject) => {
         let sent = false
         let got = false
-        let data;
         let wait = setTimeout(async () => {
             if(!got & !sent) {
                 clearTimeout(wait)
                 reject()
+                connected--
             }
         }, 20000)
         main_worker.postMessage({supporUdp: supporUdp, ip_addr: ip, port: port})
         main_worker.on('online', () => {
+            connected++
             console.log(`worker metadata started`)
         })
         main_worker.on("message", async (msg) => {
             await message(msg, connected, main_worker, ext_worker, null, null)
             if(msg.dropped) {
                 droppedIp.push(msg.host)
+                dropped_length++
             }
             if(msg.update) {
                 update('node-bittorents.json', dht_ip.toJson().nodes)
@@ -101,14 +115,17 @@ async function GetMetadataByIPPort(supporUdp=true, ip, port, main_worker, ext_wo
                 got = true
                 let data = await buff(ext_worker)
                 resolve(data)
+                connected--
             }
         })
         main_worker.on('error', (err) => {
             console.error(`error thread ${item}: ${err}`)
             reject(err)
+            connected--
         })
         main_worker.on('exit', (code) => {
             console.error(`thread exited with code: ${code}`)
+            connected--
         })
     })
 }
@@ -120,16 +137,19 @@ async function GetMetadataByHash(infoHash, main_worker, ext_worker, by_name=fals
             if(!got) {
                 reject()
                 clearTimeout(wait)
+                connected--
             }
-        }, 15000)
+        }, 20000)
         main_worker.postMessage({supporUdp: false, infoHash: infoHash})
         main_worker.on('online', () => {
+            connected++
             console.log(`worker metadata by name started`)
         })
         main_worker.on('message', async (msg) => {
             let mes = await message(msg, connected, main_worker, ext_worker, null, null)
             if(!mes) {
                 reject()
+                connected--
             }
             if(msg.metadata) {
                 reject()
@@ -139,22 +159,33 @@ async function GetMetadataByHash(infoHash, main_worker, ext_worker, by_name=fals
                         clearTimeout(wait)
                     }
                 }
+                connected--
             }
             if(msg.Buffer) {
+                got = true
                 let data = await buff(ext_worker, infoHash, by_name)
-                if(by_name) {
+                if(data[0] != null) {
                     resolve(data)
                 }
+                if(data[1] != null) {
+                    reject(data)
+                }
+                if(data[2] != null) {
+                    reject(data)
+                }
+                connected--
             }
         })
         main_worker.on('error', (err) => {
             worker.postMessage({supporUdp: true, infoHash: infoHash})
             console.log(`worker metadata by name error: ${err}`)
             reject(err)
+            connected--
         })
         main_worker.on('exit', (code) => {
             console.error(`worker metadata by name exited with code: ${code}`)
             reject(code)
+            connected--
         })
     })
 }
@@ -205,6 +236,7 @@ export async function start(key, main_workers, infoHash=null, ext_workers=null, 
             if(!h in queue_already) {
                 queue.push({host: h, port: p, supporUdp: supporUdp})
                 queue_already.push(h)
+                queue_length++
             }
         }, 1000)
     } else{
@@ -224,30 +256,25 @@ async function message(msg, connected, main_worker, ext_worker=null, metadata=nu
         if(wait) {
             clearTimeout(wait)
         }
-        connected--
         return false
     }
     if(msg.tcp_udp) {
         if(wait) {
             clearTimeout(wait)
         }
-        connected--
         return false
     }
     if(msg.handshake) {
         if(wait) {
             clearTimeout(wait)
         }
-        connected--
         return false
     }
     if(msg.socketClose) {
         clearTimeout(check)
-        connected--
         return false
     } else if(msg.err) {
         clearTimeout(check)
-        connected--
         return false
     } else if(msg.peer) {
         sent = true
@@ -270,42 +297,39 @@ async function message(msg, connected, main_worker, ext_worker=null, metadata=nu
                 }
                 delete queue[0]
             }
-            connected++
             clearInterval(int)
+            return true
         } else {
             if(msg.host != queue_already) {
                 queue.push({host: msg.host, port: msg.port, supporUdp: msg.supporUdp})
                 queue_already.push(msg.host)
+                queue_length++
             }
+            return true
         }
     } else {
         return null
     }
 }
 
-async function buff(ext_worker, infoHash, name, by_name=false) {
+async function buff(ext_worker, infoHash) {
     if(ext_index > 3) {
         ext_index = 0
     }
     ext_worker.postMessage({buffer: msg.buffer})
     ext_index++
     ext_worker.on('message', async (ext_msg) => {
-        if(by_name) {
-            console.log(`ext message: ${ext_msg}`)
-            ext_msg["infoHash"] = infoHash
-            return ext_msg
-        }
+        ext_msg["infoHash"] = infoHash
         await pool.query(`insert into users(filename, infoHash, total_length, pieces_length, hashArray) values($1, $2, $3, $4, $5)`, [ext_msg.filename, infoHash, ext_msg.total_length, ext_msg.piece_length, ext_msg.hash_array])
         infoHash_found.push(msg.host)
-        delete found[infoHash]
-        resolve(ext_msg)
+        return (ext_msg, null, null)
     })
     ext_worker.on('error', (err) => {
         console.log(`worker metadata by name error: ${err}`)
-        rejects(err)
+        return (null, err, null)
     })
     ext_worker.on('exit', (code) => {
         console.error(`worker metadata by name exited with code: ${code}`)
-        rejects(code)
+        return (null, null, code)
     })
 }

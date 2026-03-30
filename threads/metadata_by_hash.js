@@ -56,7 +56,7 @@ async function getMetadataTcp(infoHash, change=false) {
         wire.handshake(infoHash, uuid4(), {dht: true})
 
         wire.on('extended', (ext, obj) => {
-            if(!"ut_metadata" in obj.m.toString()) {
+            if(!"ut_metadata" in obj.m) {
                 parentPort.postMessage({metadata: false})
             } else {
                 let check = setTimeout(() => {

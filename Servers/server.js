@@ -1,7 +1,7 @@
 import LSD from "bittorrent-lsd";
 import DHT from "bittorrent-dht";
 import Tracker from "bittorrent-tracker"
-import { start, infoHash_found, droppedIp, nodesIp } from "../Data.js";
+import { start, infoHash_found, droppedIp, nodesIp, connected, queue_length, dropped_length } from "../Data.js";
 
 export let dht_ip;
 export let dht_hash;
@@ -73,6 +73,10 @@ export async function DhtByHash(main_worker, ext_worker, other_worker, info_hash
 
 export async function dhtByIpPort(key, main_worker, info_hash, ext_worker=null, storage=null, metadata=null, supportUdp=true, shared=false) {
     dht_ip.on('peer', async (peer, infoHash, from) => {
+        console.log(`users connected: ${connected}`)
+        console.log(`queue length: ${queue_length}`)
+        console.log(`dropped id: ${dropped_length}`)
+
         if(index > main_worker.length) {
             index = 0
         }
