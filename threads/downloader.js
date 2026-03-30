@@ -109,7 +109,9 @@ async function tcp_download(ip, port, info_hash, blocks, piece_length, hash_arra
                                 } 
                             }
                         }
-                    }  
+                    }
+                    parentPort.postMessage({end: true})  
+                    wire.destroy()
                     socket.destroy()
                 })
                 wire.on('port', (dhtPort) => {
@@ -238,6 +240,7 @@ async function udp_download(ip, port, info_hash, blocks, piece_length, hash_arra
                         }
                     }   
                     parentPort.postMessage({end: true})
+                    wire.destroy()
                     socket.destroy()
                 })
                 wire.on('port', (dhtPort) => {

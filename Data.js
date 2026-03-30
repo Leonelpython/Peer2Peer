@@ -7,12 +7,11 @@ import { dht_ip, dht_hash } from "./Servers/server.js";
 let h;
 let p;
 let info_hash;
-let name;
 let main_worker;
 let ext_worker;
+let by_name = false
 let store;
 let metadata;
-let by_name = false
 
 const queue = []
 let queue_already = Set()
@@ -27,21 +26,22 @@ let found = {}
 
 async function Downloader(supporUdp=true, ip, port, main_worker, metadata, store) {
     return new Promise((resolve, reject) => {
-        let res = false
-        let wait = setTimeout(async () => {
-            if(!res) {
-                clearTimeout(wait)
-                main_worker.destroy()
-                reject()
-            }
-        }, 15000)
-
         main_worker.postMessage({supporUdp: supporUdp, ip_addr: ip, port: port, info_hash: metadata.info_hash, blocks: metadata.blocks, piece_length: metadata.piece_length, hash_array: metadata.hash_array, filename: metadata.filename, total_length: metadata.total_length, storage: store})
         main_worker.on('online', () => {
             console.log(`worker ${item} started`)
         })
         main_worker.on("message", async (msg) => {
-            await message(msg)
+            if(msg.end) {
+                await writefile(`${metadata.filename}`, store, metadata.piece_length)
+                resolve()
+            }
+            if(msg.dropped) {
+                droppedIp.push(msg.host)
+            }
+            if(msg.update) {
+                update('node-bittorents.json', dht_ip.toJson().nodes)
+            }
+            await message(msg, connected, main_worker, null, metadata, store)
         })
         main_worker.on('error', (err) => {
             console.error(`error thread ${item}: ${err}`)
@@ -53,7 +53,7 @@ async function Downloader(supporUdp=true, ip, port, main_worker, metadata, store
     })
 }
 
-async function GetMetadataByIPPort(supporUdp=true, infoHash, ip, port, main_worker, ext_worker) {
+async function GetMetadataByIPPort(supporUdp=true, ip, port, main_worker, ext_worker) {
     return new Promise((resolve, reject) => {
         let sent = false
         let got = false
@@ -69,6 +69,13 @@ async function GetMetadataByIPPort(supporUdp=true, infoHash, ip, port, main_work
             console.log(`worker metadata started`)
         })
         main_worker.on("message", async (msg) => {
+            await message(msg, connected, main_worker, ext_worker, null, null)
+            if(msg.dropped) {
+                droppedIp.push(msg.host)
+            }
+            if(msg.update) {
+                update('node-bittorents.json', dht_ip.toJson().nodes)
+            }
             if(msg.obj) {
                 if(!"ut_metadata" in msg.m & !"ut_pex" in msg.m) {
                     droppedIp.push(msg.host)
@@ -92,8 +99,8 @@ async function GetMetadataByIPPort(supporUdp=true, infoHash, ip, port, main_work
             }
             if(msg.buffer) {
                 got = true
-                await buff(ext_worker)
-                resolve()
+                let data = await buff(ext_worker)
+                resolve(data)
             }
         })
         main_worker.on('error', (err) => {
@@ -106,7 +113,7 @@ async function GetMetadataByIPPort(supporUdp=true, infoHash, ip, port, main_work
     })
 }
 
-async function GetMetadataByHash(infoHash, main_worker, ext_worker, name=null, by_name=false) {
+async function GetMetadataByHash(infoHash, main_worker, ext_worker, by_name=false) {
     return new Promise((resolve, reject) => {
         let got = false
         let wait = setTimeout(() => {
@@ -120,7 +127,10 @@ async function GetMetadataByHash(infoHash, main_worker, ext_worker, name=null, b
             console.log(`worker metadata by name started`)
         })
         main_worker.on('message', async (msg) => {
-            await message(msg)
+            let mes = await message(msg, connected, main_worker, ext_worker, null, null)
+            if(!mes) {
+                reject()
+            }
             if(msg.metadata) {
                 reject()
                 if(wait) {
@@ -131,7 +141,7 @@ async function GetMetadataByHash(infoHash, main_worker, ext_worker, name=null, b
                 }
             }
             if(msg.Buffer) {
-                let data = await buff(ext_worker)
+                let data = await buff(ext_worker, infoHash, by_name)
                 if(by_name) {
                     resolve(data)
                 }
@@ -164,23 +174,22 @@ export async function GetTorrentData(file) {
 
 export let obj = {
     "metadata_byhash": await GetMetadataByHash(info_hash, main_worker, ext_worker),
-    "metadata_hash_byname": await GetMetadataByHash(info_hash, main_worker, ext_worker, name, by_name=true),
-    "metadata_byIPPort": await GetMetadataByIPPort(supporUdp=true, info_hash, h, p, main_worker, ext_worker),
-    "download": await Downloader(supporUdp=true, h, p, main_worker, metadata, store)
+    "metadata_hash_byname": await GetMetadataByHash(info_hash, main_worker, ext_worker, by_name=by_name),
+    "metadata_byIPPort": await GetMetadataByIPPort(supporUdp=supporUdp, h, p, main_worker, ext_worker),
+    "download": await Downloader(supporUdp=supporUdp, h, p, main_worker, metadata, store)
 }
 
-export async function start(key, main_workers, infoHash=null, ext_workers=null, names=null, by_names=false, host=null, port=null, storage=null, metadatas=null, supportUdp=true) {
+export async function start(key, main_workers, infoHash=null, ext_workers=null, by_names=false, host=null, port=null, storage=null, metadatas=null, supportUdp=true) {
     main_worker = main_workers
     ext_worker = ext_workers
     info_hash = infoHash
-    name = names
     store = storage
     metadata = metadatas
     by_name = by_names
     supporUdp = supportUdp
     h = host
     p = port
-    let result = null
+    let result;
     if(connected > 100) {
         let int = setInterval(async () => {
             if(connected < 100) {
@@ -202,79 +211,79 @@ export async function start(key, main_workers, infoHash=null, ext_workers=null, 
         result = obj[key]
         connected++
     }
-    return result
+
+    result.then((data) => {
+        return data
+    }).catch((err) => {
+        return err
+    })
 }
 
-async function message(msg, ext_worker, connected) {
+async function message(msg, connected, main_worker, ext_worker=null, metadata=null, store=null) {
     if(msg.warn) {
-        reject()
         if(wait) {
             clearTimeout(wait)
         }
         connected--
-    }
-    if(msg.end) {
-        resolve()
-        if(wait) {
-            droppedIp.push(msg.host)
-            clearTimeout(wait)
-        }
-        connected--
-    }
-    if(msg.dropped) {
-        droppedIp.push(msg.host)
+        return false
     }
     if(msg.tcp_udp) {
-        reject()
         if(wait) {
             clearTimeout(wait)
         }
         connected--
+        return false
     }
     if(msg.handshake) {
-        reject()
         if(wait) {
             clearTimeout(wait)
         }
         connected--
+        return false
     }
     if(msg.socketClose) {
-        reject()
         clearTimeout(check)
         connected--
+        return false
     } else if(msg.err) {
-        reject()
         clearTimeout(check)
         connected--
-    } else if(msg.update) {
-        update('node-bittorents.json', dht_ip.toJson().nodes)
+        return false
     } else if(msg.peer) {
         sent = true
         if(msg.host in nodesIp & !msg.supporUdp) {
             dht_ip.addNode({host: msg.host, port: msg.port})
         }
-        let int = setInterval(async () => {
-            if(connected < 100) {
-                if(msg.supporUdp == true) {
-                    nodesIp.push(msg.host)
+        if(connected < 100) {
+            if(msg.supporUdp == true) {
+                nodesIp.push(msg.host)
+                if(ext_worker != null) {
                     await GetMetadataByIPPort(msg.supporUdp, infoHash, msg.host, msg.port, main_worker, ext_worker)
                 } else {
-                    await GetMetadataByIPPort(queue[0].supporUdp, infoHash, queue[0].host, queue[0].port, main_worker, ext_worker)
-                    delete queue[0]
+                    await Downloader(msg.supporUdp, msg.host, msg.port, main_worker, metadata, store)
                 }
-                connected++
-                clearInterval(int)
             } else {
-                if(msg.host != queue_already) {
-                    queue.push({host: msg.host, port: msg.port, supporUdp: msg.supporUdp})
-                    queue_already.push(msg.host)
+                if(ext_worker != null) {
+                    await GetMetadataByIPPort(queue[0].supporUdp, infoHash, queue[0].host, queue[0].port, main_worker, ext_worker)
+                } else {
+                    await Downloader(queue[0].supporUdp, queue[0].host, queue[0].port, main_worker, metadata, store)
                 }
+                delete queue[0]
             }
-        }, 1000)
+            connected++
+            clearInterval(int)
+        } else {
+            if(msg.host != queue_already) {
+                queue.push({host: msg.host, port: msg.port, supporUdp: msg.supporUdp})
+                queue_already.push(msg.host)
+            }
+        }
+    } else {
+        return null
     }
 }
 
-async function buff(ext_worker, data) {
+async function buff(ext_worker, infoHash, name, by_name=false) {
     if(ext_index > 3) {
         ext_index = 0
     }
@@ -284,8 +293,7 @@ async function buff(ext_worker, data) {
         if(by_name) {
             console.log(`ext message: ${ext_msg}`)
             ext_msg["infoHash"] = infoHash
-            data = ext_msg
-            return data
+            return ext_msg
         }
         await pool.query(`insert into users(filename, infoHash, total_length, pieces_length, hashArray) values($1, $2, $3, $4, $5)`, [ext_msg.filename, infoHash, ext_msg.total_length, ext_msg.piece_length, ext_msg.hash_array])
         infoHash_found.push(msg.host)
