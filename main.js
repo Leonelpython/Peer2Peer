@@ -1,11 +1,14 @@
-import { threadName, Worker } from "worker_threads";
-import { obj, host, port, index, ext_index, info_hash, name } from "./Data.js";
+import { Worker } from "worker_threads";
+import { port, index, ext_index, name } from "./Data.js";
 import { DhtByHash, dhtByIpPort } from "./Servers/server.js";
 import { router } from "./Routes/routes.js";
 import express from "express"
 import helmet from "helmet";
 import cors from "cors"
 import session from "express-session";
+import { loadEnvFile } from "process";
+
+loadEnvFile('/.env')
 
 let port = 3000
 
