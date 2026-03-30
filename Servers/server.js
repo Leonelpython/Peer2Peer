@@ -5,6 +5,8 @@ import { start, info_hash, infoHash_found, droppedIp, nodesIp } from "../Data.js
 
 export let dht_ip;
 export let dht_hash;
+let index = 0
+let ext_index = 0
 
 if(fs.existsSync('nodes-bittorents.json')) {
     let bootstrap = fs.readFileSync('nodes-bittorents.json')
@@ -32,14 +34,27 @@ if(fs.existsSync('nodes-bittorents.json')) {
     })
 }
 
-export async function dhtByIpPort(key, main_worker, info_hash, ext_worker=null, name=null, by_name=false, metadata=null, storage=null, shared=false) {
+export async function dhtByIpPort(key, main_worker, info_hash, ext_worker=null, name=null, by_name=false, storage=null, metadata=null, supportUdp=true, shared=false) {
     dht_ip.on('peer', async (peer, infoHash, from) => {
-        host = peer.host
-        port = peer.port
+        if(index > main_worker.length) {
+            index = 0
+        }
+        if(ext_index > ext_worker.length) {
+            ext_index = 0
+        }
+
+        let host = peer.host
+        let port = peer.port
 
         if(!host in droppedIp & !host in nodesIp) {
-            await start(key=key, main_workers=main_worker, infoHash=info_hash, ext_workers=ext_worker, names=name, by_names=by_name, host=host, port=port, storage=storage, metadatas=metadata)
-            // clearTimeout(tim)
+            await start(key, main_worker[index], info_hash, ext_worker[ext_index], null, false, host, port, storage, metadata, supportUdp)
+            if(shared) {
+                await dhtByIpPort(key, main_worker[index], info_hash, ext_worker[ext_index], null, false, storage, metadata, supportUdp)
+                await Lsd(key, main_worker[index], info_hash, ext_worker[ext_index], null, false, storage, metadata, supportUdp)
+                await tracker(key, main_worker[index], info_hash, ext_worker[ext_index], null, false, storage, metadata, supportUdp)
+            }
+            index++
+            ext_index++
         }
     })
 
@@ -50,20 +65,31 @@ export async function dhtByIpPort(key, main_worker, info_hash, ext_worker=null, 
     dht_ip.lookup(info_hash)
 }
 
-export async function DhtByHash(main_worker, ext_worker, other_worker, info_hash=null, name=null, by_name=false, metadata=null, storage=null, shared=false) {
+export async function DhtByHash(main_worker, ext_worker, other_worker, info_hash=null, name=null, by_name=false, storage=null, metadata=null, supportUdp=true, shared=false) {
     dht_hash.on("announcement", async (infoHash, port) => {
         if(!infoHash in infoHash_found) {
+            if(index > main_worker.length) {
+                index = 0
+            }
+            if(ext_index > ext_worker.length) {
+                ext_index = 0
+            }
             if(by_name) {
-                let result = await start("metadata_hash_byname", main_worker, infoHash.toString('hex'), ext_worker, name, by_names=by_name)
+                let result = await start("metadata_hash_byname", main_worker[index], infoHash.toString('hex'), ext_worker[ext_index], name, by_name)
                 dht_hash.destroy()
+                index++
+                ext_index++
                 return result
             } else {
+                await start("metadata_byhash", main_worker[index], infoHash.toString('hex'), ext_worker[ext_index])
                 if(shared) {
-                    await tracker(key="metadata_byIPPort", main_worker=other_worker, info_hash=infoHash, ext_worker=ext_worker)
-                    await Lsd(key="metadata_byIPPort", main_worker=other_worker, info_hash=infoHash, ext_worker=ext_worker)
-                    await dhtByIpPort(key="metadata_byIPPort", main_worker=other_worker, info_hash=infoHash, ext_worker=ext_worker)
+                    await dhtByIpPort("metadata_byIPPort", other_worker[index], info_hash, ext_worker[ext_index], name, by_name, storage, metadata, supportUdp)
+                    await Lsd("metadata_byIPPort", other_worker[index], info_hash, ext_worker[ext_index], name, by_name, storage, metadata, supportUdp)
+                    await tracker("metadata_byIPPort", other_worker[index], info_hash, ext_worker[ext_index], name, by_name, storage, metadata, supportUdp)
+
                 }
-                await start("metadata_byhash", main_worker, infoHash.toString('hex'), ext_worker)
+                index++
+                ext_index++
             }
         }
     }, 50)
@@ -73,7 +99,7 @@ export async function DhtByHash(main_worker, ext_worker, other_worker, info_hash
     })
 }
 
-export async function tracker(key, main_worker, info_hash=null, ext_worker=null, name=null, by_name=false, storage=null, metadata=null, shared=false) {
+export async function tracker(key, main_worker, info_hash=null, ext_worker=null, name=null, by_name=false, storage=null, metadata=null, supportUdp=true, shared=false) {
     const opts = {
         infoHash: info_hash,
         peerId: uuidv4(),
@@ -84,22 +110,50 @@ export async function tracker(key, main_worker, info_hash=null, ext_worker=null,
     client.start()
 
     client.on('peer', async (addr) => {
-        host = addr.split(':')[0]
-        port = addr.split(':')[1]
+        if(index > main_worker.length) {
+            index = 0
+        }
+        if(ext_index > ext_worker.length) {
+            ext_index = 0
+        }
+
+        let host = addr.split(':')[0]
+        let port = addr.split(':')[1]
 
         if(!host in droppedIp & !host in nodesIp) {
-            await start(key=key, main_workers=main_worker, infoHash=info_hash, ext_workers=ext_worker, names=name, by_names=by_name, host=host, port=port, storage=storage, metadatas=metadata)
+            await start(key, main_worker[index], info_hash, ext_worker[ext_index], null, false, host, port, storage, metadata, supportUdp)
+            if(shared) {
+                await dhtByIpPort(key, main_worker[index], info_hash, ext_worker[ext_index], null, false, storage, metadata, supportUdp)
+                await Lsd(key, main_worker[index], info_hash, ext_worker[ext_index], null, false, storage, metadata, supportUdp)
+                await tracker(key, main_worker[index], info_hash, ext_worker[ext_index], null, false, storage, metadata, supportUdp)
+            }
+            index++
+            ext_index++
         }
     })
 }
 
-export async function Lsd(key, main_worker, info_hash=null, ext_worker=null, name=null, by_name=false, storage=null, metadata=null, shared=false) {
+export async function Lsd(key, main_worker, info_hash=null, ext_worker=null, storage=null, metadata=null, supportUdp=true, shared=false) {
     const lsd = new LSD(info_hash)
     lsd.start()
 
     lsd.on('peer', async (ip, port) => {
+        if(index > main_worker.length) {
+            index = 0
+        }
+        if(ext_index > ext_worker.length) {
+            ext_index = 0
+        }
+
         if(!host in droppedIp & !host in nodesIp) {
-            await start(key=key, main_workers=main_worker, infoHash=info_hash, ext_workers=ext_worker, names=name, by_names=by_name, host=host, port=port, storage=storage, metadatas=metadata)
+            await start(key, main_worker[index], info_hash, ext_worker[ext_index], null, false, ip, port, storage, metadata, supportUdp)
+            if(shared) {
+                await dhtByIpPort(key, main_worker[index], info_hash, ext_worker[ext_index], null, false, storage, metadata, supportUdp)
+                await Lsd(key, main_worker[index], info_hash, ext_worker[ext_index], null, false, storage, metadata, supportUdp)
+                await tracker(key, main_worker[index], info_hash, ext_worker[ext_index], null, false, storage, metadata, supportUdp)
+            }
+            index++
+            ext_index++
         }
     })
 }

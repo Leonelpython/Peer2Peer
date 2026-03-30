@@ -52,7 +52,7 @@ async function tcp_download(ip, port, info_hash, blocks, piece_length, hash_arra
                     const ip = peer.split(':')[0]
                     const port = peer.split(':')[1]
                     const supportUdp = flags[2]
-                    parentPort.postMessage({supportUdp: supportUdp, host: ip, port: port})
+                    parentPort.postMessage({peer: true, supportUdp: supportUdp, host: ip, port: port})
                 })
 
                 wire.ut_pex.on('dropped', (peer) => {
