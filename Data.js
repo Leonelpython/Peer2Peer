@@ -228,14 +228,14 @@ export async function start(key, main_workers, infoHash=null, ext_workers=null, 
                 let users_length = queue_users.length
                 let hash_length = queue_hash.length
                 while(connected < maxUsers & (hash_length > 0 || users_length > 0)) {
-                    if(hash_users > 0 & hash_length > 0) {
+                    if(hash_users % 40 == 0 & (hash_users != 0 & hash_length > 0)) {
                         h = queue_hash[0].host
                         p = queue_hash[0].port
                         result = obj[key]
                         delete queue_hash[0]
                         hash_users--
                         break
-                    } else if(ip_users > 0 & users_length > 0) {
+                    } else if(ip_users % 5 == 0 & (users_length > 0 & ip_users > 0)) {
                         h = queue_users[0].host
                         p = queue_users[0].port
                         result = obj[key]
@@ -245,22 +245,6 @@ export async function start(key, main_workers, infoHash=null, ext_workers=null, 
                     } else {
                         hash_users = 400
                         ip_users = 50
-                        if(hash_length > 0) {
-                            h = queue_hash[0].host
-                            p = queue_hash[0].port
-                            result = obj[key]
-                            delete queue_hash[0]
-                            hash_users--
-                            break
-                        }
-                        if(users_length > 0) {
-                            h = queue_users[0].host
-                            p = queue_users[0].port
-                            result = obj[key]
-                            delete queue_users[0]
-                            ip_users--
-                            break
-                        }
                     }
                 }
                 clearInterval(int)
