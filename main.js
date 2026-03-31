@@ -1,7 +1,6 @@
 import { Worker } from "worker_threads";
-import { port, index, ext_index, name } from "./Data.js";
 import { DhtByHash, dhtByIpPort } from "./Servers/server.js";
-import { router } from "./Routes/routes.js";
+// import { router } from "./Routes/routes.js";
 import express from "express"
 import helmet from "helmet";
 import cors from "cors"
@@ -9,8 +8,6 @@ import session from "express-session";
 import { loadEnvFile } from "process";
 
 loadEnvFile('/.env')
-
-let port = 3000
 
 export const sess = session({
     saveUninitialized: true,
@@ -25,9 +22,7 @@ const app = express()
 app.use(helmet())
 app.use(cors())
 app.use(sess)
-app.use(router)
-
-let index = 0
+// app.use(router)
 
 const storage = {}
 
@@ -61,16 +56,8 @@ async function download_byname(name) {
     let created = await createThreads(threads_name, threads_number)
 
     if(created) {
-        if(index > hash_workers.length) {
-            index = 0
-        }
-        if(ext_index > hash_workers.length) {
-            index = 0
-        }
         let metadata = await DhtByHash(hash_workers, extract_workers, IPPort_workers, null, name, true, null, null, true, true)
         await dhtByIpPort("download", IPPort_workers, metadata.infoHash, extract_workers, null, false, storage, data, true, true)
-        index++
-        ext_index++
     }
 
 }
@@ -82,17 +69,8 @@ async function download_byhash(hash) {
     let created = await createThreads(threads_name, threads_number)
 
     if(created) {
-        if(index > hash_workers.length) {
-            index = 0
-        }
-        if(ext_index > hash_workers.length) {
-            index = 0
-        }
         let metadata = await dhtByIpPort("metadata_byIPPort", IPPort_workers, hash, extract_workers, null, null, true, true)
         await dhtByIpPort("download", IPPort_workers, hash, extract_workers, storage, metadata, true, true)
-
-        index++
-        ext_index++
     }
 }
 
@@ -104,14 +82,12 @@ async function crawl() {
 
     if(created) {
         await DhtByHash(hash_workers, extract_workers, IPPort_workers, null, null, false, null, null, true, true)
-        index++
-        ext_index++
     }
 }
 
 await crawl()
 
-app.listen(port, () => {
+app.listen(3000, () => {
     console.log(`listinning: http://localhost:${port}`)
 })
 

@@ -243,10 +243,9 @@ async function udp_download(ip, port, change=false) {
 }
 
 parentPort.on('message', async (msg) => {
-    let result;
     if(msg.supporUdp == true) {
-        result = await udp_download(msg.supporUdp, msg.ip, msg.port)
+        await udp_download(msg.supporUdp, msg.ip, msg.port)
     } else {
-        result = await tcp_download(msg.supporUdp, msg.ip, msg.port)
+        await tcp_download(msg.supporUdp, msg.ip, msg.port)
     }
 })
