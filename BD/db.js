@@ -7,3 +7,5 @@ export const pool = new Pool({
     database: 'brice',
     port: 5434
 })
+
+pool.setMaxListeners(500)

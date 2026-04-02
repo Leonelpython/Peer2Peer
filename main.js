@@ -1,13 +1,13 @@
-import { Worker } from "worker_threads";
-import { DhtByHash, dhtByIpPort } from "./Servers/server.js";
+import { DhtByHash, dhtByIpPort, servers, ports } from "./Servers/server.js";
 // import { router } from "./Routes/routes.js";
 import express from "express"
 import helmet from "helmet";
 import cors from "cors"
 import session from "express-session";
 import { loadEnvFile } from "process";
+import { hash_workers, IPPort_workers, extract_workers, disk_workers, GetMetadataByHash, GetMetadataByIPPort, Downloader, createThreads } from "./Data.js"
 
-loadEnvFile('/.env')
+loadEnvFile('./.env')
 
 export const sess = session({
     saveUninitialized: true,
@@ -19,35 +19,19 @@ export const sess = session({
     }
 })
 const app = express()
+// const app = http.createServer((req, res) => {
+//     res.writeHead(200, {"content-type": "application/json"})
+//     res.end()
+// })
+
 app.use(helmet())
 app.use(cors())
 app.use(sess)
 // app.use(router)
 
-const storage = {}
-
-const hash_workers = []
-const IPPort_workers = []
-const extract_workers = []
-const disk_workers = []
-
 let name = 'fast and furious 6'
 
-async function createThreads(threads_name, threads_number) {
-    for(let i = 0; i < threads_number.length; i++) {
-        if(i < threads_number[i]) {
-            if("extract_workers" in threads_name)
-                extract_workers.push(new Worker(threads_name["extract_workers"]))
-            if("hash_workers" in threads_name)
-                hash_workers.push(new Worker(threads_name["hash_workers"]))
-            if("IPPort_workers" in threads_name)
-                IPPort_workers.push(new Worker(threads_name["IPPort_workers"]))
-            if("disk_workers" in threads_name)
-                disk_workers.push(new Worker(threads_name["disk_workers"]))
-        }
-    }
-    return true
-}
+const storage = {}
 
 async function download_byname(name) {
     let threads_name = {extract_workers: './threads/extract.js', hash_workers: './threads/metadata_by_hash.js', IPPort_workers: './threads/metadata_by_ip_port.js', disk_workers: './threads/disk.js'}
@@ -80,6 +64,10 @@ async function crawl() {
 
     let created = await createThreads(threads_name, threads_number)
 
+    console.log(`threads created`)
+    console.log(`threads ip : ${JSON.stringify(IPPort_workers)}`)
+    console.log(`threads ip 0 : ${JSON.stringify(IPPort_workers[0])}`)
+
     if(created) {
         await DhtByHash(hash_workers, extract_workers, IPPort_workers, null, null, false, null, null, true, true)
     }
@@ -88,7 +76,7 @@ async function crawl() {
 await crawl()
 
 app.listen(3000, () => {
-    console.log(`listinning: http://localhost:${port}`)
+    console.log(`listinning: http://localhost:${3000}`)
 })
 
 export default express

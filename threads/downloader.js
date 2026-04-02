@@ -5,6 +5,7 @@ import Protocol from "bittorrent-protocol"
 import crypto from "crypto"
 import ut_pex from "ut_pex"
 import utp from "utp-native"
+import { buffer } from "stream/consumers"
 
 let tu = false
 let hs = false
@@ -21,8 +22,10 @@ let check = setTimeout(() => {
 
 let udp_port = 20000
 
+let storage = {}
+
 async function tcp_download(ip, port, info_hash, blocks, piece_length, hash_array, total_length, storage, change=false) {
-    let socket = net.connect(port, ip, () => {
+    let socket = net.createConnection(port, ip, () => {
         tu = true
         clearTimeout(check)
         // let socket;
@@ -94,11 +97,12 @@ async function tcp_download(ip, port, info_hash, blocks, piece_length, hash_arra
                                         })
 
                                     }
-                                    const buffer = Buffer.from(storage[index])
+                                    let buffer = Buffer.from(storage[index])
                                     storage[index] = buffer
                                     let check = await compareHash(buffer, hash_array[index])
                                     if(check) {
                                         wire.have(index)
+                                        parentPort.postMessage({store: true, index: index, buffer: buffer})
                                         if(index * piece_length == total_length) {
                                             wire.uninterested()
                                             return true

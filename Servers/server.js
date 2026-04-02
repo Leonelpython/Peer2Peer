@@ -2,9 +2,13 @@ import LSD from "bittorrent-lsd";
 import DHT from "bittorrent-dht";
 import Tracker from "bittorrent-tracker"
 import { start, infoHash_found, droppedIp, nodesIp, connected, queue_hash, queue_users, dropped_length } from "../Data.js";
+import fs from "fs"
 
 export let dht_ip;
 export let dht_hash;
+
+let goal;
+
 let index = 0
 let ext_index = 0
 
@@ -13,6 +17,9 @@ let announcement = 0
 let dht_ip_peers = 0
 let tracker_peers = 0
 let lsd_peers = 0
+
+export const servers = []
+export const ports = []
 
 let clean_queue = null
 
@@ -33,7 +40,7 @@ if(fs.existsSync('nodes-bittorents.json')) {
     dht_hash = new DHT({
         maxAge: 1800000,
         concurrency: 128,
-        verify: buffer.alloc(0)
+        verify: Buffer.alloc(0)
     })
 
     dht_ip = new DHT({
@@ -80,26 +87,37 @@ export async function DhtByHash(main_worker, ext_worker, other_worker, info_hash
                     ext_index++
                     return result
                 } else {
-                    console.log(`main worker: ${main_worker}`)
-                    console.log(`main worker index: ${main_worker[index]}`)
-
-                    await start("metadata_byhash", main_worker[index], infoHash.toString('hex'), ext_worker[ext_index], by_name, null, null, storage, metadata, supportUdp, "hash")
+                    if(servers[index] == false) {
+                        goal = 'create_server'
+                    } else {
+                        goal = 'announce'
+                    }
+                    await start("metadata_byhash", main_worker[index], infoHash.toString('hex'), ext_worker[ext_index], by_name, null, null, storage, metadata, supportUdp, "hash", goal, ports[index])
+                    if(servers[index] == false) {
+                        servers[index] = true
+                    }
                     if(shared) {
                         await dhtByIpPort("metadata_byIPPort", other_worker[index], info_hash, ext_worker[ext_index], by_name, storage, metadata, supportUdp)
                         await Lsd("metadata_byIPPort", other_worker[index], info_hash, ext_worker[ext_index], by_name, storage, metadata, supportUdp)
                         await tracker("metadata_byIPPort", other_worker[index], info_hash, ext_worker[ext_index], by_name, storage, metadata, supportUdp)
-
                     }
                     index++
                     ext_index++
                 }
+
+                dht_hash.announce(infoHash, ports[index], (err) => {
+                    if(err) {
+                        parentPort.postMessage({err: err})
+                    }
+                })
+
                 announcement++
             }
         })
-    }, 1000)
+    }, 100)
 
     dht_hash.listen(20000, () => {
-        console.log(`listinning port 2000 udp`)
+        console.log(`listinning dht port 20000 udp`)
     })
 }
 
@@ -219,3 +237,5 @@ async function display() {
     console.log(`\rall announcement: ${announcement}`)
     console.log(`\rall peers got: ${allpeers}`)
 }
+
+console.log(`server`)

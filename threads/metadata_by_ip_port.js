@@ -31,7 +31,7 @@ async function tcp_download(ip, port) {
     // } else {
     //     socket = net.connect(port, ip)
     // }
-    let socket = net.connect(port, ip, () => {
+    let socket = net.createConnection(port, ip, () => {
         tu = true
         clearTimeout(tcp_udp_timeout)
 
